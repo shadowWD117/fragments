@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fragments</title>
+    <style>
+        html, body{
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+#container{
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(120deg, #111, #222, #333);
+    background-size: 300% 300%;
+    animation: bgShift 12s ease-in-out infinite;
+}
+
+@keyframes bgShift{
+    0%{ background-position: 0% 50%; }
+    50%{ background-position: 100% 50%; }
+    100%{ background-position: 0% 50%; }
+}
+
+        #text{
+            font-size: 1.2rem;
+            color: #fff;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 1;
+            transition: opacity 0.4s ease;
+        }
+        
+        #text{
+    animation: drift 4s ease-in-out infinite;
+}
+
+@keyframes drift {
+    0% { transform: translate(-50%, -50%) }
+    50% { transform: translate(calc(-50% + 2px), calc(-50% + 1px)); }
+    100% { transform: translate(-50%, -50%) }
+}
+        
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <h2 id="text">text</h2>
+</div>
+
+<script>
+
+/* ========= PRELOAD & AUDIO POOL SYSTEM ========= */
+
+let audioPool = {}; // penyimpanan pool semua audio
+
+function preloadSound(path, count = 3){
+    audioPool[path] = [];
+
+    for (let i = 0; i < count; i++){
+        const a = new Audio(path);
+        a.preload = "auto";
+        audioPool[path].push(a);
+    }
+}
+
+function safePlay(path, volume = 1){
+    const pool = audioPool[path];
+    if (!pool) return;
+
+    const audio = pool.find(a => a.paused || a.ended);
+    if (!audio) return; // semua slot sibuk, skip supaya aman
+
+    audio.volume = volume;
+    audio.currentTime = 0;
+
+    audio.play().catch(()=>{});
+}
+
+
+/* ========= INITIAL ARRAYS ========= */
+
+let arrSound = [
+    "sfx/click1.mp3",
+    "sfx/click2.mp3",
+    "sfx/click3.mp3",
+    "sfx/click4.mp3"
+];
+
+// arrText kamu taruh sendiri nanti
+
+let arrText = [
+    "maybe not today",
+    "it still hurt",
+    "he forgot again",
+    "silent, again",
+    "still waiting",
+    "trying to breathe",
+    "the room is colder now",
+    "he said he'll come back",
+    "my hands are shaking",
+    "the clock stopped ticking",
+    "i hid the letters",
+    "the mirror avoids me",
+    "the sky feels heavier",
+    "i lost the rhythm",
+    "no one's listening",
+    "the noise is quiet again",
+    "i forgot my own voice",
+    "yesterday stayed too long",
+    "the world feels pixelated",
+    "i'm glitching again",
+    "not the same anymore",
+    "breathing feels manual",
+    "i miss the old me",
+    "he didn't look back",
+    "the shadows are louder",
+    "i'm learning to fall",
+    "the silence presses",
+    "his echo still lingers",
+    "i faded a little",
+    "my dreams feel borrowed",
+    "i whispered to no one",
+    "night came too early",
+    "my heart blinked red",
+    "i'm offline again",
+    "his warmth expired",
+    "the stars won't answer",
+    "i locked the door twice",
+    "i forgot the password",
+    "the light flickers",
+    "i'm buffering inside",
+    "my smile is artificial",
+    "he unread me",
+    "this room keeps shrinking",
+    "i lost the map",
+    "the window feels distant",
+    "my pulse stumbles",
+    "i'm running in circles",
+    "he turned the page",
+    "the silence glowed",
+    "i swallowed the noise",
+    "the rain walked away",
+    "i misplaced myself",
+    "he slipped between days",
+    "the air tastes strange",
+    "the chair remembers him",
+    "i blinked too long",
+    "the door sighed",
+    "my voice is dust",
+    "he dissolved slowly",
+    "i held the cold",
+    "the morning skipped me",
+    "i paused too long",
+    "this emptiness hums",
+    "the moon hid again",
+    "i unlearned happiness",
+    "he forgot my name",
+    "i forgot his face",
+    "the echo stutters",
+    "i feel transparent",
+    "the silence cracks",
+    "his memory drips",
+    "i misplaced reality",
+    "my chest feels hollow",
+    "i broke the rhythm",
+    "the day won't open",
+    "i slipped between hours",
+    "my shadow left early",
+    "i exist quietly",
+    "the cold is patient",
+    "i lost connection",
+    "he skipped this chapter",
+    "the window won't blink",
+    "i tasted loneliness",
+    "this page is empty",
+    "i survived yesterday",
+    "the world forgot me",
+    "my heart desynced",
+    "the floor feels safer",
+    "he walked past me",
+    "i paused breathing",
+    "this silence echoes",
+    "the room swallowed time",
+    "i drift again",
+    "i'm tired of returning",
+    "he didn't notice",
+    "i cracked a little",
+    "my soul lagged",
+    "i'm learning to disappear",
+    "the day feels hollow",
+    "i left myself unread"
+];
+
+
+/* ========= PRELOAD SEMUA AUDIO ========= */
+
+function preloadAllAudio(){
+    arrSound.forEach(s => preloadSound(s, 4));
+
+    thunderTemplates.forEach(t => {
+        preloadSound(t.sound, 4);
+    });
+}
+
+
+
+/* ========= BASIC SETUP ========= */
+
+const text = document.getElementById("text");
+const container = document.getElementById("container");
+
+let clickCount = 0;
+let rainActive = false;
+
+
+/* ========= UTILITIES ========= */
+
+function randomPosition(element) {
+    const screenW = container.clientWidth;
+    const screenH = container.clientHeight;
+    const elW = element.offsetWidth;
+    const elH = element.offsetHeight;
+
+    const x = Math.random() * (screenW - elW);
+    const y = Math.random() * (screenH - elH);
+
+    return { x, y };
+}
+
+function randomColor(){
+    return `hsl(${Math.random()*360}, 80%, 70%)`;
+}
+
+
+/* ========= CLICK SOUND (POOL-BASED) ========= */
+
+function playRandomSound(){
+    const idx = Math.floor(Math.random() * arrSound.length);
+    safePlay(arrSound[idx], 0.4);
+}
+
+
+/* ========= TEXT CLICK LOGIC ========= */
+
+text.addEventListener("click", () => {
+
+    clickCount++;
+
+    if (clickCount === 5 && !rainActive) {
+        rainActive = true;
+        startRainEffect();
+        startLightningSystem();
+        startThunderEngine();
+    }
+
+    text.style.opacity = "0";
+
+    setTimeout(() => {
+
+        const idx = Math.floor(Math.random() * arrText.length);
+        text.textContent = arrText[idx];
+        text.style.color = randomColor();
+
+        const pos = randomPosition(text);
+        text.style.left = pos.x + "px";
+        text.style.top = pos.y + "px";
+        text.style.transform = "none";
+        text.style.opacity = "1";
+
+        playRandomSound();
+
+
+        /* ==== echo effect ==== */
+
+        const echo = document.createElement("div");
+        echo.textContent = text.textContent;
+        echo.style.position = "absolute";
+        echo.style.left = text.style.left;
+        echo.style.top = text.style.top;
+        echo.style.fontSize = "1.2rem";
+        echo.style.opacity = "0";
+        echo.style.color = text.style.color;
+        echo.style.transition = "opacity 1s ease, transform 1s ease";
+        container.appendChild(echo);
+
+        setTimeout(() => {
+            echo.style.opacity = "0";
+            echo.style.transform = "translateY(-10px)";
+        }, 50);
+
+        setTimeout(() => echo.remove(), 1000);
+
+    }, 250);
+});
+
+
+/* ========= RAIN EFFECT ========= */
+
+function startRainEffect(){
+    container.style.background = "#000";
+
+    const rainCanvas = document.createElement("canvas");
+    rainCanvas.id = "rainCanvas";
+    rainCanvas.width = container.clientWidth;
+    rainCanvas.height = container.clientHeight;
+    rainCanvas.style.position = "absolute";
+    rainCanvas.style.top = "0";
+    rainCanvas.style.left = "0";
+    rainCanvas.style.pointerEvents = "none";
+    container.appendChild(rainCanvas);
+
+    const ctx = rainCanvas.getContext("2d");
+
+    let drops = [];
+
+    for (let i = 0; i < 150; i++) {
+        drops.push({
+            x: Math.random() * rainCanvas.width,
+            y: Math.random() * rainCanvas.height,
+            speed: 4 + Math.random() * 4,
+            length: 10 + Math.random() * 10
+        });
+    }
+
+    function rainLoop(){
+        ctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.lineWidth = 1;
+
+        for (let d of drops){
+            ctx.beginPath();
+            ctx.moveTo(d.x, d.y);
+            ctx.lineTo(d.x, d.y + d.length);
+            ctx.stroke();
+
+            d.y += d.speed;
+
+            if (d.y > rainCanvas.height){
+                d.y = -20;
+                d.x = Math.random() * rainCanvas.width;
+            }
+        }
+
+        requestAnimationFrame(rainLoop);
+    }
+
+    rainLoop();
+}
+
+
+/* ========= LIGHTNING LAYER ========= */
+
+function startLightningSystem(){
+    const flashLayer = document.createElement("div");
+    flashLayer.id = "flashLayer";
+    flashLayer.style.position = "absolute";
+    flashLayer.style.top = "0";
+    flashLayer.style.left = "0";
+    flashLayer.style.width = "100%";
+    flashLayer.style.height = "100%";
+    flashLayer.style.background = "#fff";
+    flashLayer.style.opacity = "0";
+    flashLayer.style.pointerEvents = "none";
+    flashLayer.style.transition = "opacity 0.1s ease";
+    container.appendChild(flashLayer);
+}
+
+
+/* ========= THUNDER TEMPLATE ========= */
+
+let thunderTemplates = [
+    {
+        sound: "sfx/thunder1.mp3",
+        flashes: [
+            { x: 0.15, y: 0.2, intensity: 1.2, duration: 90 },
+            { x: 0.17, y: 0.22, intensity: 0.7, duration: 140 }
+        ],
+        minDelay: 2500,
+        maxDelay: 7000
+    },
+    {
+        sound: "sfx/thunder2.mp3",
+        flashes: [
+            { x: 0.75, y: 0.1, intensity: 1.4, duration: 120 }
+        ],
+        minDelay: 3000,
+        maxDelay: 6500
+    },
+    {
+        sound: "sfx/thunder3.mp3",
+        flashes: [
+            { x: 0.45, y: 0.15, intensity: 0.9, duration: 70 },
+            { x: 0.5,  y: 0.18, intensity: 1.4, duration: 150 },
+            { x: 0.51, y: 0.20, intensity: 1, duration: 190 }
+        ],
+        minDelay: 4000,
+        maxDelay: 9000
+    }
+];
+
+preloadAllAudio();
+
+
+/* ========= THUNDER ENGINE ========= */
+
+function startThunderEngine(){
+    runThunderLoop();
+}
+
+function runThunderLoop(){
+    const template = thunderTemplates[Math.floor(Math.random() * thunderTemplates.length)];
+
+    playThunderTemplate(template);
+
+    const delay = template.minDelay + Math.random() * (template.maxDelay - template.minDelay);
+
+    setTimeout(runThunderLoop, delay);
+}
+
+function playThunderTemplate(template){
+    safePlay(template.sound, 0.9);
+
+    template.flashes.forEach((flash, i) => {
+        setTimeout(() => doFlash(flash), i * 120);
+    });
+}
+
+function doFlash(flash){
+    const f = document.getElementById("flashLayer");
+    if (!f) return;
+
+    f.style.transition = "none";
+    f.style.opacity = flash.intensity;
+
+    let x = flash.x * container.clientWidth;
+    let y = flash.y * container.clientHeight;
+
+    f.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(255,255,255,1), rgba(255,255,255,0) 70%)`;
+
+    setTimeout(() => {
+        f.style.transition = "opacity 0.15s ease";
+        f.style.opacity = "0";
+    }, flash.duration);
+}
+
+</script>
+
+</body>
+</html>
