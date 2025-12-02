@@ -9,6 +9,7 @@
             height: 100%;
             margin: 0;
             padding: 0;
+            user-select: none;
         }
 
 #container{
@@ -26,7 +27,7 @@
 }
 
         #text{
-            font-size: 1.2rem;
+            font-size: 20px;
             color: #fff;
             position: absolute;
             left: 50%;
@@ -56,9 +57,36 @@
 
 <script>
 
-/* ========= PRELOAD & AUDIO POOL SYSTEM ========= */
+/* ========= PRELOAD & AUDIO PERMISSION SYSTEM ========= */
 
-let audioPool = {}; // penyimpanan pool semua audio
+let audioPool = {};
+let userHasInteracted = localStorage.getItem('audioPermission') === 'granted';
+let audioContextUnlocked = false;
+
+// Silent audio untuk unlock audio context
+function unlockAudioContext() {
+    const silentAudio = new Audio();
+    silentAudio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+    silentAudio.volume = 0.001;
+    
+    return new Promise((resolve) => {
+        silentAudio.play().then(() => {
+            silentAudio.pause();
+            resolve(true);
+        }).catch(() => {
+            resolve(false);
+        });
+    });
+}
+
+// Coba unlock saat load jika ada permission sebelumnya
+window.addEventListener('load', () => {
+    if (userHasInteracted) {
+        unlockAudioContext().then(unlocked => {
+            audioContextUnlocked = unlocked;
+        });
+    }
+});
 
 function preloadSound(path, count = 3){
     audioPool[path] = [];
@@ -71,16 +99,26 @@ function preloadSound(path, count = 3){
 }
 
 function safePlay(path, volume = 1){
+    if (!userHasInteracted) {
+        return;
+    }
+    
     const pool = audioPool[path];
     if (!pool) return;
 
     const audio = pool.find(a => a.paused || a.ended);
-    if (!audio) return; // semua slot sibuk, skip supaya aman
+    if (!audio) return;
 
     audio.volume = volume;
     audio.currentTime = 0;
 
-    audio.play().catch(()=>{});
+    audio.play().catch((err) => {
+        console.warn("Audio play failed:", err.message);
+        if (err.name === 'NotAllowedError') {
+            userHasInteracted = false;
+            localStorage.removeItem('audioPermission');
+        }
+    });
 }
 
 
@@ -92,8 +130,6 @@ let arrSound = [
     "sfx/click3.mp3",
     "sfx/click4.mp3"
 ];
-
-// arrText kamu taruh sendiri nanti
 
 let arrText = [
     "maybe not today",
@@ -203,7 +239,6 @@ let arrText = [
 
 function preloadAllAudio(){
     arrSound.forEach(s => preloadSound(s, 4));
-
     thunderTemplates.forEach(t => {
         preloadSound(t.sound, 4);
     });
@@ -242,6 +277,8 @@ function randomColor(){
 /* ========= CLICK SOUND (POOL-BASED) ========= */
 
 function playRandomSound(){
+    if (!userHasInteracted) return;
+    
     const idx = Math.floor(Math.random() * arrSound.length);
     safePlay(arrSound[idx], 0.4);
 }
@@ -249,8 +286,7 @@ function playRandomSound(){
 
 /* ========= TEXT CLICK LOGIC ========= */
 
-text.addEventListener("click", () => {
-
+function handleTextClick() {
     clickCount++;
 
     if (clickCount === 5 && !rainActive) {
@@ -263,7 +299,6 @@ text.addEventListener("click", () => {
     text.style.opacity = "0";
 
     setTimeout(() => {
-
         const idx = Math.floor(Math.random() * arrText.length);
         text.textContent = arrText[idx];
         text.style.color = randomColor();
@@ -276,9 +311,7 @@ text.addEventListener("click", () => {
 
         playRandomSound();
 
-
         /* ==== echo effect ==== */
-
         const echo = document.createElement("div");
         echo.textContent = text.textContent;
         echo.style.position = "absolute";
@@ -296,8 +329,23 @@ text.addEventListener("click", () => {
         }, 50);
 
         setTimeout(() => echo.remove(), 1000);
-
     }, 250);
+}
+
+text.addEventListener("click", () => {
+    // Unlock audio pada klik pertama
+    if (!audioContextUnlocked || !userHasInteracted) {
+        unlockAudioContext().then(unlocked => {
+            audioContextUnlocked = unlocked;
+            userHasInteracted = true;
+            localStorage.setItem('audioPermission', 'granted');
+            
+            // Setelah unlock, jalankan fungsi klik
+            handleTextClick();
+        });
+    } else {
+        handleTextClick();
+    }
 });
 
 
@@ -379,7 +427,7 @@ let thunderTemplates = [
     {
         sound: "sfx/thunder1.mp3",
         flashes: [
-            { x: 0.15, y: 0.2, intensity: 1.2, duration: 90 },
+            { x: 0.15, y: 0.2, intensity: 1.2, duration: 900 },
             { x: 0.17, y: 0.22, intensity: 0.7, duration: 140 }
         ],
         minDelay: 2500,
